@@ -10,7 +10,7 @@ pub fn Board(comptime N: usize) type {
         }
 
         pub fn move(this: *This, player: i2, row: usize, col: usize) !void {
-            if ((row < N) or (col < N)) return error.IndexOutOfBounds;
+            if ((row >= N) or (col >= N)) return error.IndexOutOfBounds;
             if (this.board.get(N * row + col) != 0) return error.IndexIsFull;
             this.board.set(N * row + col, player);
         }
@@ -22,17 +22,17 @@ pub fn Board(comptime N: usize) type {
 
             const r1 = struct {
                 fn f(row: usize, col: usize) usize {
-                    return N * (N - col) + row;
+                    return N * (N - col - 1) + row;
                 }
             }.f;
             const r2 = struct {
                 fn f(row: usize, col: usize) usize {
-                    return N * (N - col) + (N - row);
+                    return N * (N - row - 1) + (N - col - 1);
                 }
             }.f;
             const r3 = struct {
                 fn f(row: usize, col: usize) usize {
-                    return N * (N - row) + (N - col);
+                    return N * col + (N - row - 1);
                 }
             }.f;
             const td1 = struct {
@@ -42,26 +42,27 @@ pub fn Board(comptime N: usize) type {
             }.f;
             const td2 = struct {
                 fn f(row: usize, col: usize) usize {
-                    return N * (N - col) + (N - row);
+                    return N * (N - col - 1) + (N - row - 1);
                 }
             }.f;
             const tx = struct {
                 fn f(row: usize, col: usize) usize {
-                    return N * row + (N - col);
+                    return N * row + (N - col - 1);
                 }
             }.f;
             const ty = struct {
                 fn f(row: usize, col: usize) usize {
-                    return N * (N - row) + col;
+                    return N * (N - row - 1) + col;
                 }
             }.f;
 
-            const transforms = &[7]fn (row: usize, col: usize) usize{ r1, r2, r3, td1, td2, tx, ty };
+            const transforms = [7]*const fn (row: usize, col: usize) usize{ r1, r2, r3, td1, td2, tx, ty };
 
-            for (transforms, 0..) |transform, i| {
+            for (0..7) |i| {
                 var board = std.PackedIntArray(i2, N * N).initAllTo(0);
                 for (0..N) |row| {
                     for (0..N) |col| {
+                        const transform = transforms[i];
                         board.set(N * row + col, this.board.get(transform(row, col)));
                     }
                 }
@@ -71,94 +72,41 @@ pub fn Board(comptime N: usize) type {
             return isom;
         }
 
-        pub fn is_win(this: This) i2 {
-            //check rows
-            for (0..N) |row| {
-                const start = this.board.get(N * row);
-                if (start != 0) {
-                    var win_state = true;
-                    for (1..N) |col| {
-                        const crnt = this.board.get(N * row + col);
-                        if (crnt == 0) {
-                            win_state = false;
-                            break;
+        pub fn is_win(this: *This) ?i2 {
+            const check_path = struct {
+                fn f(t: std.PackedIntArray(i2, N * N), start_idx: usize, stride: usize) ?i2 {
+                    const start = t.get(start_idx);
+                    if (start != 0) {
+                        var win_state = true;
+                        for (1..N) |i| {
+                            const crnt = t.get(start_idx + stride * i);
+                            if (crnt == 0) {
+                                win_state = false;
+                                break;
+                            }
+                            if (start != crnt) {
+                                win_state = false;
+                                break;
+                            }
                         }
-                        if (start != crnt) {
-                            win_state = false;
-                            break;
-                        }
-                    }
 
-                    if (win_state) {
-                        return start;
-                    }
-                }
-            }
-
-            // check cols
-            for (0..N) |col| {
-                const start = this.board.get(col);
-                if (start != 0) {
-                    var win_state = true;
-                    for (1..N) |row| {
-                        const crnt = this.board.get(N * row + col);
-                        if (crnt == 0) {
-                            win_state = false;
-                            break;
-                        }
-                        if (start != crnt) {
-                            win_state = false;
-                            break;
+                        if (win_state) {
+                            return start;
                         }
                     }
-
-                    if (win_state) {
-                        return start;
-                    }
+                    return null;
                 }
+            }.f;
+
+            for (0..N) |i| {
+                if (check_path(this.board, N * i, 1)) |winner| return winner;
+                if (check_path(this.board, i, N)) |winner| return winner;
             }
 
-            //check primary diagonal
-            const start1 = this.board.get(0);
-            if (start1 != 0) {
-                var win_state = true;
-                for (1..N) |i| {
-                    const crnt = this.board.get((N + 1) * i);
-                    if (crnt == 0) {
-                        win_state = false;
-                        break;
-                    }
-                    if (start1 != crnt) {
-                        win_state = false;
-                        break;
-                    }
-                }
+            if (check_path(this.board, 0, N + 1)) |winner| return winner;
+            if (check_path(this.board, N - 1, N - 1)) |winner| return winner;
 
-                if (win_state) {
-                    return start1;
-                }
-            }
-
-            //check secondary diagonal
-            const start2 = this.board.get(N - 1);
-            if (start2 != 0) {
-                var win_state = true;
-                for (1..N) |i| {
-                    const crnt = this.board.get((N - 1) * i);
-                    if (crnt == 0) {
-                        win_state = false;
-                        break;
-                    }
-                    if (start2 != crnt) {
-                        win_state = false;
-                        break;
-                    }
-                }
-
-                if (win_state) {
-                    return start2;
-                }
-            }
+            return null;
         }
 
         pub fn print_board(this: This) void {
@@ -167,13 +115,14 @@ pub fn Board(comptime N: usize) type {
                 for (0..N) |col| {
                     const val = this.board.get(N * row + col);
                     if (val == 0) {
-                        std.debug.print("#", .{});
+                        std.debug.print(" #", .{});
                     } else if (val == 1) {
-                        std.debug.print("O", .{});
+                        std.debug.print(" O", .{});
                     } else {
-                        std.debug.print("X", .{});
+                        std.debug.print(" X", .{});
                     }
                 }
+                std.debug.print("\n", .{});
             }
             std.debug.print("\n", .{});
         }
@@ -216,9 +165,9 @@ pub fn Queue(comptime T: type) type {
             return start.data;
         }
         pub fn deinit(this: *This) void {
-            var crnt: ?T = this.out();
-            while (crnt != null) {
-                crnt = this.out();
+            var crnt: T = this.out() catch return;
+            while (true) {
+                crnt = this.out() catch return;
             }
         }
     };
@@ -234,7 +183,7 @@ pub fn Tree(comptime N: usize) type {
 
             pub fn init(a: std.mem.Allocator, board: Board(N)) !*TNode {
                 const out: *TNode = try a.create(TNode);
-                out = .{ .parents = std.ArrayList(*TNode).init(a), .children = [N * N]?*TNode{null} ** (N * N), .val = board };
+                out.* = .{ .parents = std.ArrayList(*TNode).init(a), .children = [_]?*TNode{null} ** (N * N), .val = board };
                 return out;
             }
 
@@ -264,16 +213,15 @@ pub fn Tree(comptime N: usize) type {
         lvl: usize,
         player: i2,
 
-        pub fn init(a: std.mem.Allocator) This {
-            return This{ .a = a, .root = TNode.init(a, Board(N).init()), .lvl = 0, .player = 1 };
+        pub fn init(a: std.mem.Allocator) !This {
+            return This{ .a = a, .root = try TNode.init(a, Board(N).init()), .lvl = 0, .player = 1 };
         }
 
         fn add_terminals_to_queue(node: ?*TNode, q: *Queue(*TNode)) !void {
             if (node == null) return;
-
             var state = true;
             for (0..7) |i| {
-                if (node.?.children[i] != null) {
+                if (node.?.children[i]) |_| {
                     state = false;
                     break;
                 }
@@ -316,7 +264,7 @@ pub fn Tree(comptime N: usize) type {
                     } else {
                         std.debug.print("{}    || {}\n", .{ this.lvl, qlen });
                     }
-                    if (std.time.milliTimestamp() - start_time > timer) break;
+                    if ((std.time.milliTimestamp() - start_time > timer) or (this.lvl >= N * N)) break;
                 }
 
                 var crnt = try q.out();
@@ -324,26 +272,28 @@ pub fn Tree(comptime N: usize) type {
 
                 for (0..N) |row| {
                     for (0..N) |col| {
-                        var new_board:Board(N) = crnt.val;
-                        try new_board.move(this.player, row, col) catch {
+                        var new_board: Board(N) = crnt.val;
+                        new_board.move(this.player, row, col) catch {
                             continue;
                         };
-                        const isoms:[8]Board(N) = new_board.isometries();
+
+                        const isoms: [8]Board(N) = new_board.isometries();
                         var not_in_tree = true;
-                        for (isoms) |isom|{
-                            if (h.get(isom)) |node|{
+
+                        for (isoms) |isom| {
+                            if (h.get(isom)) |node| {
                                 try node.parents.append(crnt);
-                                crnt.children[N*row+col] = node;
+                                crnt.children[N * row + col] = node;
                                 not_in_tree = false;
                                 break;
                             }
                         }
-                        if (not_in_tree){
+                        if (not_in_tree) {
                             const child = try TNode.init(this.a, new_board);
                             try child.parents.append(crnt);
-                            crnt.children[N*row+col] = child;
+                            crnt.children[N * row + col] = child;
                             try h.put(new_board, child);
-                            if (new_board.is_win() != 0){
+                            if (new_board.is_win() == null) {
                                 try q.in(child);
                             }
                         }
@@ -354,16 +304,16 @@ pub fn Tree(comptime N: usize) type {
             std.debug.print("\n\n", .{});
             std.debug.print("Level || Times (ms)\n", .{});
             std.debug.print("-------------------\n", .{});
-            for (lvl_times.items, 0..) |time, i|{
-                if (i < 10){
-                    std.debug.print("{}     || {}\n", .{ i+1, time });
-                }else{
-                    std.debug.print("{}    || {}\n", .{ i+1, time });
+            for (lvl_times.items, 0..) |time, i| {
+                if (i + 1 < 10) {
+                    std.debug.print("{}     || {}\n", .{ i + 1, time });
+                } else {
+                    std.debug.print("{}    || {}\n", .{ i + 1, time });
                 }
             }
         }
 
-        pub fn deinit(this: *This) !void{
+        pub fn deinit(this: *This) void {
             this.root.deinit(this.a);
             this.lvl = 0;
             this.player = 1;
@@ -376,7 +326,7 @@ pub fn main() !void {
     const a = gpa.allocator();
     errdefer std.debug.assert(gpa.deinit() == .ok);
 
-    var tree = Tree(3).init(a);
+    var tree = try Tree(5).init(a);
     errdefer tree.deinit();
-    try tree.propogate(10000);
+    try tree.propogate(1_000_000);
 }
