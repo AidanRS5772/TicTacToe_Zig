@@ -270,7 +270,7 @@ pub fn Tree(comptime N: usize) type {
                 var crnt = try q.out();
                 qlen -= 1;
 
-                if ((this.lvl >= 2*(N-1)) and (this.player == -1)) {
+                if ((this.lvl >= 2*(N-1)) and (this.player == 1)) {
                     var valid_boards = std.ArrayList(Board(N)).init(this.a);
                     var valid_moves = std.ArrayList(usize).init(this.a);
                     errdefer valid_boards.deinit();
@@ -305,16 +305,19 @@ pub fn Tree(comptime N: usize) type {
                                 }
                             }
                         }
+                        if (winner){
+                            break;
+                        }
                     }
 
                     if (winner) {
                         const board: Board(N) = valid_boards.pop();
 
-                        std.debug.print("Winning Board: Level = {} , Player = {}\n", .{this.lvl+1 , this.player});
-                        board.print_board();
-                        std.debug.print("Parent:\n", .{});
-                        crnt.val.print_board();
-                        std.debug.print("\n", .{});
+                        // std.debug.print("Winning Board: Level = {} , Player = {}\n", .{this.lvl+1 , this.player});
+                        // board.print_board();
+                        // std.debug.print("Parent:\n", .{});
+                        // crnt.val.print_board();
+                        // std.debug.print("\n", .{});
 
                         const child = try TNode.init(this.a, board);
                         try child.parents.append(crnt);
