@@ -270,31 +270,93 @@ pub fn Tree(comptime N: usize) type {
                 var crnt = try q.out();
                 qlen -= 1;
 
-                for (0..N) |row| {
-                    for (0..N) |col| {
-                        var new_board: Board(N) = crnt.val;
-                        new_board.move(this.player, row, col) catch {
-                            continue;
-                        };
+                if ((this.lvl >= 2*(N-1)) and (this.player == -1)) {
+                    var valid_boards = std.ArrayList(Board(N)).init(this.a);
+                    var valid_moves = std.ArrayList(usize).init(this.a);
+                    errdefer valid_boards.deinit();
+                    errdefer valid_boards.deinit();
 
-                        const isoms: [8]Board(N) = new_board.isometries();
-                        var not_in_tree = true;
+                    var winner = false;
+                    for (0..N) |row| {
+                        for (0..N) |col| {
+                            var new_board: Board(N) = crnt.val;
+                            new_board.move(this.player, row, col) catch {
+                                continue;
+                            };
 
-                        for (isoms) |isom| {
-                            if (h.get(isom)) |node| {
-                                try node.parents.append(crnt);
-                                crnt.children[N * row + col] = node;
-                                not_in_tree = false;
-                                break;
+                            const isoms: [8]Board(N) = new_board.isometries();
+                            var not_in_tree = true;
+
+                            for (isoms) |isom| {
+                                if (h.get(isom)) |node| {
+                                    try node.parents.append(crnt);
+                                    crnt.children[N * row + col] = node;
+                                    not_in_tree = false;
+                                    break;
+                                }
+                            }
+
+                            if (not_in_tree) {
+                                try valid_boards.append(new_board);
+                                try valid_moves.append(N * row + col);
+                                if (new_board.is_win() != null) {
+                                    winner = true;
+                                    break;
+                                }
                             }
                         }
-                        if (not_in_tree) {
-                            const child = try TNode.init(this.a, new_board);
+                    }
+
+                    if (winner) {
+                        const board: Board(N) = valid_boards.pop();
+
+                        std.debug.print("Winning Board: Level = {} , Player = {}\n", .{this.lvl+1 , this.player});
+                        board.print_board();
+                        std.debug.print("Parent:\n", .{});
+                        crnt.val.print_board();
+                        std.debug.print("\n", .{});
+
+                        const child = try TNode.init(this.a, board);
+                        try child.parents.append(crnt);
+                        crnt.children[valid_moves.pop()] = child;
+                        try h.put(board, child);
+                    } else {
+                        for (valid_boards.items, valid_moves.items) |board, mv| {
+                            const child = try TNode.init(this.a, board);
                             try child.parents.append(crnt);
-                            crnt.children[N * row + col] = child;
-                            try h.put(new_board, child);
-                            if (new_board.is_win() == null) {
-                                try q.in(child);
+                            crnt.children[mv] = child;
+                            try h.put(board, child);
+                            try q.in(child);
+                        }
+                    }
+                } else {
+                    for (0..N) |row| {
+                        for (0..N) |col| {
+                            var new_board: Board(N) = crnt.val;
+                            new_board.move(this.player, row, col) catch {
+                                continue;
+                            };
+
+                            const isoms: [8]Board(N) = new_board.isometries();
+                            var not_in_tree = true;
+
+                            for (isoms) |isom| {
+                                if (h.get(isom)) |node| {
+                                    try node.parents.append(crnt);
+                                    crnt.children[N * row + col] = node;
+                                    not_in_tree = false;
+                                    break;
+                                }
+                            }
+
+                            if (not_in_tree) {
+                                const child = try TNode.init(this.a, new_board);
+                                try child.parents.append(crnt);
+                                crnt.children[N * row + col] = child;
+                                try h.put(new_board, child);
+                                if (new_board.is_win() == null) {
+                                    try q.in(child);
+                                }
                             }
                         }
                     }
