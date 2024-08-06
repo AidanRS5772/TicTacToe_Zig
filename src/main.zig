@@ -326,7 +326,7 @@ pub fn main() !void {
     const a = gpa.allocator();
     errdefer std.debug.assert(gpa.deinit() == .ok);
 
-    var tree = try Tree(5).init(a);
+    var tree = try Tree(3).init(a);
     errdefer tree.deinit();
     try tree.propogate(1_000_000);
 }
